@@ -1,0 +1,43 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connectivity tenders</title>
+<style>
+:root{--bg:#edf2f1;--ink:#12282f;--mute:#5a7077;--line:#c7d4d2;--blue:#2447c9;--amber:#b86e00;--green:#1b7a55}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Avenir Next","Segoe UI",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 48px}
+main{max-width:920px;margin:0 auto}h1{font-size:1.9rem;margin:.6em 0 .1em;letter-spacing:-.01em}.sub{color:var(--mute);margin:0 0 1.2rem}
+.tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px}
+.tab{font:inherit;text-align:left;background:#fff;border:2px solid transparent;border-radius:6px;padding:10px 12px;color:var(--ink);cursor:pointer}
+.tab b{display:block;font-size:2rem;line-height:1.1;font-variant-numeric:tabular-nums}.tab[aria-pressed=true]{border-color:var(--blue)}.tab.hot b{color:var(--amber)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.bar input,.bar select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);min-width:0}.bar input{flex:1 1 200px}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 16px;padding:12px 0 12px 12px;border-left:4px solid var(--blue);border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
+.row:hover .t{text-decoration:underline}.row.award{border-left-color:var(--green)}.row.planning{border-left-color:var(--mute)}
+.t{font-weight:600}.m{color:var(--mute);font-size:.88rem;display:flex;flex-wrap:wrap;gap:2px 14px}
+.r{text-align:right;font-variant-numeric:tabular-nums;font-size:.9rem}.d.soon{color:var(--amber);font-weight:600}.isl{color:var(--blue);font-weight:600}
+.empty{padding:28px 0;color:var(--mute)}:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+@media(max-width:560px){.row{grid-template-columns:1fr}.r{text-align:left}}
+</style></head><body><main>
+<h1>Connectivity tenders</h1><p class="sub" id="upd">Telecoms notices from the UK and EU</p>
+<div class="tabs" id="tabs"></div>
+<div class="bar"><input id="q" type="search" placeholder="Search title or buyer" aria-label="Search">
+<select id="src" aria-label="Source"><option value="">All sources</option><option>Find a Tender</option><option>Contracts Finder</option><option>TED</option></select>
+<select id="reg" aria-label="Region"><option value="">All regions</option><option value="isl">Isle of Man &amp; Channel Islands</option><option value="UK">UK</option><option value="EU">EU and Ireland</option></select></div>
+<div id="list"></div></main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const B=[['week','Closing this week'],['month','Closing in 8 to 30 days'],['later','Later or open'],['award','Awarded']];
+let ALL=[],bk='week';const now=Date.now();
+const days=t=>t.deadline?Math.ceil((new Date(t.deadline)-now)/864e5):null;
+const bucket=t=>{if(t.stage=='award')return'award';const d=days(t);return d===null?'later':d<0?'x':d<=7?'week':d<=30?'month':'later'};
+const ok=t=>{const q=$('#q').value.toLowerCase(),s=$('#src').value,r=$('#reg').value;
+return(!q||(t.title+t.buyer).toLowerCase().includes(q))&&(!s||t.source==s)&&(!r||(r=='isl'?t.islands:r=='UK'?t.country=='UK':t.country!='UK'))};
+const money=t=>t.value?new Intl.NumberFormat('en-GB',{style:'currency',currency:/^[A-Z]{3}$/.test(t.currency)?t.currency:'GBP',notation:'compact',maximumFractionDigits:1}).format(t.value):'Value not stated';
+const row=t=>{const d=days(t),u=/^https?:/.test(t.url)?t.url:'#';
+return`<a class="row ${esc(t.stage)}" href="${esc(u)}" target="_blank" rel="noopener"><div><div class="t">${esc(t.title)}</div><div class="m"><span>${esc(t.buyer)}</span><span>${esc(t.source)}</span>${t.islands?'<span class="isl">Isle of Man / Channel Islands</span>':''}</div></div><div class="r"><div>${money(t)}</div><div class="d ${d!==null&&d<=7?'soon':''}">${t.stage=='award'?'Awarded '+esc((t.published||'').slice(0,10)):t.deadline?'Closes '+esc(t.deadline)+' ('+d+' days)':'No deadline'}</div></div></a>`};
+function render(){const f=ALL.filter(ok),n={};f.forEach(t=>n[bucket(t)]=(n[bucket(t)]||0)+1);
+$('#tabs').innerHTML=B.map(([k,l])=>`<button class="tab ${k=='week'?'hot':''}" data-k="${k}" aria-pressed="${k==bk}"><b>${n[k]||0}</b>${l}</button>`).join('');
+const L=f.filter(t=>bucket(t)==bk).sort((a,b)=>bk=='award'?(b.published||'').localeCompare(a.published||''):(a.deadline||'9').localeCompare(b.deadline||'9'));
+$('#list').innerHTML=L.length?L.map(row).join(''):'<p class="empty">Nothing here. Try another tab or clear the filters.</p>'}
+$('#tabs').onclick=e=>{const b=e.target.closest('.tab');if(b){bk=b.dataset.k;render()}};
+['q','src','reg'].forEach(i=>$('#'+i).oninput=render);
+fetch('tenders.json').then(r=>r.json()).then(d=>{ALL=d.items;$('#upd').textContent='Refreshed '+new Date(d.updated).toLocaleString('en-GB')+', '+ALL.length+' notices';render()})
+.catch(()=>{$('#list').innerHTML='<p class="empty">No data yet. In your repo, open Actions, choose Refresh tenders, then Run workflow.</p>'});
+</script></body></html>
